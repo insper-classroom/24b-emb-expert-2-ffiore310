@@ -44,8 +44,6 @@
 
 #define READ_BIT 0x80
 
-volatile int32_t t_fine;
-
 uint16_t dig_T1;
 int16_t dig_T2, dig_T3;
 uint16_t dig_P1;
