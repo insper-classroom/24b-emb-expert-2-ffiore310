@@ -81,18 +81,18 @@ typedef struct {
 } SensorData;
 
 
-int32_t compensate_temp(int32_t adc_T) {
+int32_t compensate_temp(int32_t adc_T, int32_t *t_fine) {
     int32_t var1, var2, T;
     var1 = ((((adc_T >> 3) - ((int32_t) dig_T1 << 1))) * ((int32_t) dig_T2)) >> 11;
     var2 = (((((adc_T >> 4) - ((int32_t) dig_T1)) * ((adc_T >> 4) - ((int32_t) dig_T1))) >> 12) * ((int32_t) dig_T3))
             >> 14;
 
-    t_fine = var1 + var2;
-    T = (t_fine * 5 + 128) >> 8;
+    *t_fine = var1 + var2;
+    T = (*t_fine * 5 + 128) >> 8;
     return T;
 }
 
-uint32_t compensate_pressure(int32_t adc_P) {
+uint32_t compensate_pressure(int32_t adc_P, int32_t t_fine) {
     int32_t var1, var2;
     uint32_t p;
     var1 = (((int32_t) t_fine) >> 1) - (int32_t) 64000;
@@ -117,7 +117,7 @@ uint32_t compensate_pressure(int32_t adc_P) {
     return p;
 }
 
-uint32_t compensate_humidity(int32_t adc_H) {
+uint32_t compensate_humidity(int32_t adc_H, int32_t t_fine) {
     int32_t v_x1_u32r;
     v_x1_u32r = (t_fine - ((int32_t) 76800));
     v_x1_u32r = (((((adc_H << 14) - (((int32_t) dig_H4) << 20) - (((int32_t) dig_H5) * v_x1_u32r)) +
@@ -233,14 +233,15 @@ void task_bme280(void *pvParameters) {
     write_register(0xF4, 0x27); 
 
     int32_t humidity_raw, pressure_raw, temperature_raw;
+    int32_t t_fine;
 
     while (1) {
         bme280_read_raw(&humidity_raw, &pressure_raw, &temperature_raw);
 
         SensorData sensor_data;
-        sensor_data.temperature = compensate_temp(temperature_raw) / 100.0; // Conversão para °C
-        sensor_data.pressure = (float)compensate_pressure(pressure_raw);    // Em Pascal
-        sensor_data.humidity = compensate_humidity(humidity_raw) / 1024.0; // Em %
+        sensor_data.temperature = compensate_temp(temperature_raw, &t_fine) / 100.0; // Conversão para °C
+        sensor_data.pressure = (float)compensate_pressure(pressure_raw, t_fine);    // Em Pascal
+        sensor_data.humidity = compensate_humidity(humidity_raw, t_fine) / 1024.0; // Em %
 
         // Envio dos dados para a fila
         if (xQueueSend(xQueue, &sensor_data, portMAX_DELAY) == pdPASS) {
